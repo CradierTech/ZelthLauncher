@@ -27,7 +27,7 @@ ZELTH_CHANNEL="${ZELTH_CHANNEL:-stable}"
 ZELTH_REPO="${ZELTH_REPO:-CradierTech/ZelthLauncher}"
 ELECTRON_VERSION="${ELECTRON_VERSION:-33.4.11}"
 INSTALL_DIR="${ZELTH_DIR:-$HOME/.local/share/zelth}"
-BUNDLE_NAME="${ZELTH_BUNDLE:-zelth-latest.tar.gz}"
+BUNDLE_NAME="${ZELTH_BUNDLE:-zelth-latest-linux.tar.gz}"
 APP_NAME="Zelth"
 APP_ID="zelth"
 # ============================================================================
@@ -38,6 +38,8 @@ BUNDLE_URL=""
 MANIFEST_URL=""
 SRC_DIR=""
 DO_ELECTRON=1
+DO_SAVES=1
+DO_LAUNCH=1
 DO_DESKTOP=1
 DO_CLI=1
 DO_VERIFY=1
@@ -178,6 +180,8 @@ parse_args() {
             --bundle=*)         BUNDLE_NAME="${1#*=}" ;;
             --repo)             ZELTH_REPO="${2:-}"; shift ;;
             --repo=*)           ZELTH_REPO="${1#*=}" ;;
+            --no-preserve-saves) DO_SAVES=0 ;;
+            --no-launch)        DO_LAUNCH=0 ;;
             --no-electron)      DO_ELECTRON=0 ;;
             --no-desktop)       DO_DESKTOP=0 ;;
             --no-cli)           DO_CLI=0 ;;
@@ -218,6 +222,8 @@ ${C_BOLD}${C_MOON}OPTIONS${C_RESET}
   ${C_GOLD}--no-desktop${C_RESET}        skip .desktop + icon registration
   ${C_GOLD}--no-cli${C_RESET}           skip the ~/.local/bin/zelth symlink
   ${C_GOLD}--no-verify${C_RESET}         skip checksum verification
+  ${C_GOLD}--no-preserve-saves${C_RESET} wipe existing game saves on upgrade (default: keep them)
+  ${C_GOLD}--no-launch${C_RESET}        install only, do not start the launcher
   ${C_GOLD}--no-cache${C_RESET}          re-download even if cached
   ${C_GOLD}--lang <en|pt>${C_RESET}      force UI language
   ${C_GOLD}--force${C_RESET}             overwrite an existing install without asking
@@ -491,11 +497,14 @@ fetch_bundle() {
     step "$(t 'Reading manifest' 'Lendo manifesto')..."
     local mf="$TMPDIR_Z/manifest.json"
     if fetch "$MANIFEST_URL" "$mf" 2>/dev/null; then
-        local mv bn ea
+        local mv bn ea lx
         mv="$(json_get "$mf" version || true)"
+        lx="$(json_get "$mf" linux || true)"
         bn="$(json_get "$mf" bundle || true)"
         ea="$(json_get "$mf" electron || true)"
         [ -n "$mv" ] && ZELTH_VERSION="$mv" && have "version $mv"
+        # prefer the linux-specific build, fall back to the combined bundle
+        [ -n "$lx" ] && bn="$lx"
         [ -n "$bn" ] && BUNDLE_NAME="$bn" && BUNDLE_URL="$DIST_URL/$bn" && have "bundle $bn"
         [ -n "$ea" ] && [ "$DO_ELECTRON" = "1" ] && ELECTRON_VERSION="$ea" && have "electron $ea"
     else
@@ -509,18 +518,33 @@ fetch_bundle() {
         return 0
     fi
 
-    # ---- cache ----
-    local tarball="$CACHE_DIR/$BUNDLE_NAME"
-    if [ -f "$tarball" ] && [ "$KEEP_CACHE" = "1" ] && [ "$DO_VERIFY" = "1" ]; then
-        c_info "$(t 'Cached bundle found:' 'Pacote em cache:') $tarball"
-        FETCHED_TARBALL="$tarball"
-        ok "$(t 'Using cache' 'Usando cache') ($(human_size "$(wc -c < "$tarball")"))"
-    else
-        step "$(t 'Downloading' 'Baixando') $BUNDLE_NAME ..."
-        fetch "$BUNDLE_URL" "$tarball.part" || die "$(t 'Download failed' 'Download falhou'): $BUNDLE_URL"
-        mv -f "$tarball.part" "$tarball"
-        ok "$(t 'Downloaded' 'Baixado') $(human_size "$(wc -c < "$tarball")")"
-    fi
+    # ---- fetch (prefer the linux build, fall back to the combined bundle) ----
+    local cand tarball
+    for cand in "$BUNDLE_NAME" "zelth-latest.tar.gz"; do
+        [ -n "$cand" ] || continue
+        if [ "$cand" != "$BUNDLE_NAME" ] && [ "$BUNDLE_NAME" != "zelth-latest.tar.gz" ]; then
+            c_skip "$(t 'trying fallback' 'tentando alternativa') $cand"
+        fi
+        tarball="$CACHE_DIR/$cand"
+        if [ -f "$tarball" ] && [ "$KEEP_CACHE" = "1" ]; then
+            c_info "$(t 'Cached bundle found:' 'Pacote em cache:') $tarball"
+        elif [ "$KEEP_CACHE" = "1" ] || [ ! -f "$tarball" ]; then
+            step "$(t 'Downloading' 'Baixando') $cand ..."
+            if fetch "$DIST_URL/$cand" "$tarball.part"; then
+                mv -f "$tarball.part" "$tarball"
+            else
+                rm -f "$tarball.part"
+                [ -f "$tarball" ] || continue
+            fi
+        fi
+        if [ -f "$tarball" ]; then
+            BUNDLE_NAME="$cand"
+            BUNDLE_URL="$DIST_URL/$cand"
+            ok "$(t 'Bundle ready' 'Pacote pronto') $cand ($(human_size "$(wc -c < "$tarball")"))"
+            break
+        fi
+    done
+    [ -n "${tarball:-}" ] && [ -f "$tarball" ] || die "$(t 'Download failed' 'Download falhou'): $BUNDLE_URL"
     FETCHED_TARBALL="$tarball"
 
     # ---- checksum ----
@@ -638,6 +662,44 @@ stage_files() {
 
     # ---- executable bits ----
     chmod +x "$INSTALL_DIR/zelth" "$INSTALL_DIR/zelth.bin" "$INSTALL_DIR/uninstall.sh" 2>/dev/null
+
+    restore_saves
+    return 0
+}
+
+# ============================================================================
+#  SAVES  (the bundle ships empty saves/ dirs -- never clobber real worlds)
+# ============================================================================
+restore_saves() {
+    local prev="$INSTALL_DIR.prev"
+    [ "$DO_SAVES" = "1" ] || return 0
+    [ -d "$prev/game/versions" ] || return 0
+
+    if [ "$DRY_RUN" = "1" ]; then
+        c_skip "[dry-run] would carry over $(t 'game saves from' 'salvamentos de') $prev"
+        return 0
+    fi
+
+    local restored=0 vdir old new
+    for vdir in "$prev"/game/versions/*/; do
+        [ -d "$vdir" ] || continue
+        local vd; vd="$(basename "$vdir")"
+        old="$vdir/saves"
+        [ -d "$old" ] || continue
+        # nothing to carry over if the old saves dir is empty
+        [ -n "$(ls -A "$old" 2>/dev/null)" ] || continue
+        new="$INSTALL_DIR/game/versions/$vd/saves"
+        mkdir -p "$new" || continue
+        # real worlds win over the bundle's empty stubs
+        rm -rf "${new:?}"/*
+        if cp -a "$old/." "$new/" 2>/dev/null; then
+            restored=$((restored+1))
+            c_skip "$(t 'carried over saves for' 'salvamentos preservados para') $vd"
+        else
+            warn "$(t 'Could not carry over saves for' 'Nao foi possivel preservar salvamentos de') $vd -- copies remain in $prev"
+        fi
+    done
+    [ "$restored" -gt 0 ] && have "$restored $(t 'version(s) with saves kept' 'versao(oes) com salvamentos mantidos')"
     return 0
 }
 
@@ -963,6 +1025,33 @@ summary() {
 }
 
 # ============================================================================
+#  LAUNCH
+# ============================================================================
+launch_app() {
+    if [ "$DO_LAUNCH" = "0" ]; then
+        c_skip "$(t 'not starting the launcher (--no-launch)' 'nao iniciando o launcher (--no-launch)')"
+        return 0
+    fi
+    if [ "$DRY_RUN" = "1" ]; then
+        c_skip "[dry-run] would launch $INSTALL_DIR/zelth"
+        return 0
+    fi
+    local start="$INSTALL_DIR/zelth"
+    if [ ! -x "$start" ]; then
+        warn "$(t 'Start script not found:' 'Script de inicio nao encontrado:') $start"
+        return 0
+    fi
+    step "$(t 'Launching Zelth' 'Iniciando Zelth') ..."
+    if ( cd "$INSTALL_DIR" && setsid "$start" >/dev/null 2>&1 & ) 2>/dev/null; then
+        ok "$(t 'started in the background' 'iniciado em segundo plano')"
+    else
+        ( cd "$INSTALL_DIR" && nohup "$start" >/dev/null 2>&1 & ) 2>/dev/null \
+            && ok "$(t 'started in the background' 'iniciado em segundo plano')" \
+            || warn "$(t 'could not start it - run' 'nao foi possivel iniciar - execute') zelth"
+    fi
+}
+
+# ============================================================================
 #  MAIN
 # ============================================================================
 main() {
@@ -987,6 +1076,7 @@ main() {
     install_cli
     verify
     summary
+    launch_app
     cleanup
     exit 0
 }

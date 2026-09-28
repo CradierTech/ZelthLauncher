@@ -34,6 +34,9 @@ mkdir -p "$WORK/pub" "$WORK/src/game/versions/zelth Prime 1.21.11 fabric"
   printf '#!/usr/bin/env bash\necho zelth\n' > zelth; chmod +x zelth
   printf '\x89PNG\r\n\x1a\n-selftest-icon' > zelth.png
   echo '{"name":"zelth","version":"0.0.0-selftest","main":"main.js"}' > package.json
+  # a world shipped in the bundle, so upgrade precedence can be asserted
+  mkdir -p "game/versions/zelth Prime 1.21.11 fabric/saves/BundledWorld"
+  echo BUNDLE2 > "game/versions/zelth Prime 1.21.11 fabric/saves/BundledWorld/level.dat"
   tar -czf "$WORK/pub/zelth-latest.tar.gz" .
 )
 ( cd "$WORK/pub" && sha256sum zelth-latest.tar.gz > SHA256SUMS )
@@ -100,9 +103,34 @@ if [ "$HAVE_HTTP" = "1" ]; then
   printf '%s' "$out" | grep -q 'sha256'; chk $? "checksum verified against SHA256SUMS"
 
   hdr "reinstall"
+  # a world the player created, plus a diverged copy of the bundled one
+  SV="$WORK/home/z/game/versions/zelth Prime 1.21.11 fabric/saves"
+  mkdir -p "$SV/MyWorld"
+  echo REAL    > "$SV/MyWorld/level.dat"
+  echo BUNDLE1 > "$SV/BundledWorld/level.dat"
   HOME="$WORK/home" bash "$SCRIPT" --channel "$BASE" --dir "$WORK/home/z" \
         --no-electron --force >/dev/null 2>&1; chk $? "reinstall exits 0"
   [ -d "$WORK/home/z.prev" ]; chk $? "previous install kept as .prev"
+
+  hdr "saves survive an upgrade"
+  SV2="$WORK/home/z/game/versions/zelth Prime 1.21.11 fabric/saves"
+  [ -f "$SV2/MyWorld/level.dat" ]; chk $? "player world survived reinstall"
+  [ "$(cat "$SV2/MyWorld/level.dat" 2>/dev/null)" = "REAL" ]; chk $? "world contents intact"
+  # the freshly-extracted bundle ships BUNDLE2; the old install's BUNDLE1 must win
+  [ "$(cat "$SV2/BundledWorld/level.dat" 2>/dev/null)" = "BUNDLE1" ]; chk $? "existing saves win over the new bundle"
+
+  hdr "--no-preserve-saves opts out"
+  HOME="$WORK/home" bash "$SCRIPT" --channel "$BASE" --dir "$WORK/home/z" \
+        --no-electron --force --no-preserve-saves >/dev/null 2>&1
+  [ $? = 0 ]; chk $? "reinstall with --no-preserve-saves exits 0"
+  SV3="$WORK/home/z/game/versions/zelth Prime 1.21.11 fabric/saves"
+  [ ! -d "$SV3/MyWorld" ]; chk $? "opt-out wipes the world (as documented)"
+
+  hdr "launch control"
+  HOME="$WORK/home" bash "$SCRIPT" --channel "$BASE" --dir "$WORK/home/z" \
+        --no-electron --force --no-launch >/dev/null 2>&1
+  [ $? = 0 ]; chk $? "--no-launch installs cleanly"
+  grep -q 'no-launch' <(HOME="$WORK/home" bash "$SCRIPT" --help 2>&1); chk $? "--no-launch documented in --help"
 
   hdr "integrity"
   cp "$WORK/pub/zelth-latest.tar.gz" "$WORK/pub/keep.tgz"
