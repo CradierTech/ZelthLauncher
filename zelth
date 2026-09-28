@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Zelth Launcher - start script
+DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+exec "$DIR/node_modules/.bin/electron" "$DIR" --no-sandbox "$@" 2> >(grep -v -E 'Fontconfig warning:|MESA-INTEL: warning|libva error:|GetVSyncParametersIfAvailable' >&2)

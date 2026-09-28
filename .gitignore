@@ -1,0 +1,27 @@
+# Electron / Node -- fetched by the installer, never committed
+node_modules/
+package-lock.json
+
+# Minecraft game data (370 MB) -- shipped as a GitHub Release asset, not in git.
+# Regenerate with:  ./zelth (or run the launcher once)
+game/
+
+# Dev/verify scratch
+meteor-verify/
+tools/
+*.backup*
+
+# Private dev notes -- not published
+CHEATS.md
+
+# Build output
+zelth-latest.tar.gz
+SHA256SUMS
+manifest.json
+
+# Stray dev binaries
+install.bin
+zelth.bin
+zelthpack
+zelth_theme.py
+zelth.desktop

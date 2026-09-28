@@ -1,0 +1,16 @@
+{
+  "name": "zelth",
+  "version": "1.0.0",
+  "description": "Zelth Minecraft Launcher",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^33.4.11"
+  },
+  "allowScripts": {
+    "electron@33.4.11": true
+  }
+}

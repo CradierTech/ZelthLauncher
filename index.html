@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'">
+    <title>Zelth</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body class="theme-aero">
+    <div id="shell" class="shell">
+
+    <!-- ==================== INTRO ==================== -->
+    <div id="intro" class="intro">
+        <div class="intro-stack">
+            <div class="intro-logo">Z</div>
+            <div class="intro-sub">zelth</div>
+        </div>
+    </div>
+
+    <!-- ==================== MAIN ==================== -->
+    <div id="main" class="main hidden">
+
+        <div class="menu-bg" id="menuBg"></div>
+        <div class="menu-scrim"></div>
+
+        <!-- HEADER -->
+        <header class="header">
+            <div class="spacer"></div>
+            <button id="closeBtn" class="close-button" title="Close">×</button>
+        </header>
+
+        <!-- CENTER -->
+        <div class="stage">
+
+            <div class="logo-block">
+                <div class="logo-monogram">Z</div>
+                <div class="logo-sub">zelth</div>
+            </div>
+
+            <div class="menu-buttons">
+                <div class="account-row hidden" id="accountRow">
+                    <span class="account-note">Offline account</span>
+                    <input type="text" id="usernameInput" class="account-input"
+                           placeholder="Write your own name" maxlength="16" spellcheck="false">
+                </div>
+
+                <button id="chooseBtn" class="action-button">Select Version…</button>
+                <button id="playBtn" class="action-button play-button hidden">Play</button>
+                <button id="settingsBtn" class="action-button">Options…</button>
+                <button id="quitBtn" class="action-button">Quit</button>
+
+                <div class="launch-status hidden" id="launchStatus">
+                    <div class="status-line" id="statusLine">Ready</div>
+                    <div class="log-box" id="logBox"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="menu-bottomline">
+            <span class="footer-label">ZelthV3 - Linux</span>
+        </div>
+
+        <!-- SETTINGS OVERLAY -->
+        <div id="settingsOverlay" class="overlay hidden">
+            <div class="settings-card">
+                <div class="settings-header">
+                    <h2 class="settings-title">Options</h2>
+                    <button id="settingsCloseBtn" class="close-button" title="Back">×</button>
+                </div>
+                <p class="settings-tip">Theme</p>
+                <div id="themeList" class="theme-list"></div>
+            </div>
+        </div>
+
+        <!-- VERSION PICKER OVERLAY -->
+        <div id="versionOverlay" class="overlay hidden">
+            <div class="settings-card">
+                <div class="settings-header">
+                    <h2 class="settings-title">Choose Version</h2>
+                    <button id="versionCloseBtn" class="close-button" title="Back">×</button>
+                </div>
+                <p class="settings-tip">Installed Minecraft versions</p>
+                <div id="versionList" class="version-list"></div>
+            </div>
+        </div>
+    </div>
+
+    </div><!-- /shell -->
+    <script src="renderer.js"></script>
+</body>
+</html>
