@@ -41,14 +41,14 @@ param(
     [string]$InstallDir,
     [string]$ElectronVersion = '',
     [string]$BundleName = '',
-    [ValidateSet('en','pt')][string]$Lang = ''
+    [ValidateSet('en','pt','')][string]$Lang = ''
 )
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version 2.0
 
 # ---------------------------------------------------------------- config ----
-$script:ZelthVersion = '3.1.0'
+$script:ZelthVersion = '3.1.1'
 $script:ElectronDefault = '33.4.11'
 $script:BundleDefault  = 'zelth-latest-windows.zip'
 $script:FallbackBundle = 'zelth-latest.tar.gz'
@@ -80,11 +80,11 @@ function Paint([string]$code, [string]$text) {
     return "$code$text$([char]27 + '[0m')"
 }
 function Section { param([string]$m) Write-Host ''; Write-Host (Paint ([char]27 + '[1;36m') ("== " + $m + " ==")) }
-function Step    { param([string]$m) Write-Host (Paint ([char]27 + '[33m') ('-> ')) -NoNewline; Write-Host $m }
-function Ok      { param([string]$m) Write-Host (Paint ([char]27 + '[32m') '  [ok] ') -NoNewline; Write-Host $m }
-function Have    { param([string]$m) Write-Host (Paint ([char]27 + '[36m') '  [+] ') -NoNewline; Write-Host $m }
-function Warn    { param([string]$m) Write-Host (Paint ([char]27 + '[33m') '  [!] ') -NoNewline; Write-Host $m }
-function Skip    { param([string]$m) Write-Host (Paint ([char]27 + '[90m') ('  [.] ' + $m)) }
+function Step    { param([string]$m,[string]$d='') if ($d) { $m = "$m $d" }; Write-Host (Paint ([char]27 + '[33m') ('-> ')) -NoNewline; Write-Host $m }
+function Ok      { param([string]$m,[string]$d='') if ($d) { $m = "$m $d" }; Write-Host (Paint ([char]27 + '[32m') '  [ok] ') -NoNewline; Write-Host $m }
+function Have    { param([string]$m,[string]$d='') if ($d) { $m = "$m $d" }; Write-Host (Paint ([char]27 + '[36m') '  [+] ') -NoNewline; Write-Host $m }
+function Warn    { param([string]$m,[string]$d='') if ($d) { $m = "$m $d" }; Write-Host (Paint ([char]27 + '[33m') '  [!] ') -NoNewline; Write-Host $m }
+function Skip    { param([string]$m,[string]$d='') if ($d) { $m = "$m $d" }; Write-Host (Paint ([char]27 + '[90m') ('  [.] ' + $m)) }
 function Die     { param([string]$m) Write-Host ''; Write-Host (Paint ([char]27 + '[31m') ('error: ' + $m)) -ForegroundColor Red; exit 1 }
 
 function HumanSize([long]$bytes) {
